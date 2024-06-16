@@ -45,20 +45,15 @@ record DNSHeader(int id, short flags, int qdCount, int anCount, int nsCount, int
     private static final int Z_SHIFT = 4;
     private static final int RCODE_SHIFT = 0;
     public DNSHeader{
-        if (id < 0 || id > 0xFFFF){
-            throw new IllegalArgumentException("ID must be a 16-bit value");
-        }
-        if (qdCount < 0 || qdCount > 0xFFFF){
-            throw new IllegalArgumentException("qdCount must be a 16-bit value");
-        }
-        if (anCount < 0 || anCount > 0xFFFF){
-            throw new IllegalArgumentException("anCount must be a 16-bit value");
-        }
-        if (nsCount < 0 || nsCount > 0xFFFF){
-            throw new IllegalArgumentException("nsCount must be a 16-bit value");
-        }
-        if (arCount < 0 || arCount > 0xFFFF){
-            throw new IllegalArgumentException("arCount must be a 16-bit value");
+        validateValues(id,"ID");
+        validateValues(qdCount,"qdCount");
+        validateValues(anCount,"anCount");
+        validateValues(nsCount,"nsCount");
+        validateValues(arCount,"arCount");
+    }
+    private void validateValues(int value, String name){
+        if(value < 0 || value > 0xFFFF){
+            throw new IllegalArgumentException(name + " must be a 16-bit value");
         }
     }
     public DNSHeader response(){
@@ -140,7 +135,7 @@ record DNSAnswer(String label, short type, short qClass, int ttl, short rdLength
         if(label.length() > 63){
             throw new IllegalArgumentException("Label max size is 63 bytes");
         }
-        if(rdLength < 0 || rdLength > 0xFFFF){
+        if(rdLength < 0){
             throw new IllegalArgumentException("rdLength capped at 2 bytes");
         }
         if(rData.length != rdLength){

@@ -20,9 +20,11 @@ public class DNSServer {
                 System.out.println(receivedMessage);
                 DNSHeader header = DNSHeader.deserializeFromByteArray(Arrays.copyOf(buffer,12));
                 DNSQuestion question = DNSQuestion.deserializeFromByteArray(Arrays.copyOfRange(buffer,12,buffer.length));
+                DNSAnswer answer = DNSAnswer.answer(question);
                 ByteBuffer result = ByteBuffer.allocate(512);
                 result.put(header.response().serializeToByteArray());
                 result.put(question.serializeToByteArray());
+                result.put(answer.serializeToByteArray());
                 final DatagramPacket packetResponse = new DatagramPacket(
                         result.array(), result.array().length,packet.getSocketAddress()
                 );
@@ -60,7 +62,7 @@ record DNSHeader(int id, short flags, int qdCount, int anCount, int nsCount, int
         }
     }
     public DNSHeader response(){
-        return new DNSHeader(id,(short) (flags | (1 << QR_BIT)),1,0,0,0);
+        return new DNSHeader(id,(short) (flags | (1 << QR_BIT) | (4 & 0x0F) << RCODE_SHIFT),1,1,0,0); // ensures correct RCODE according to received OPCODE
     }
     public static short buildFlags(boolean qr, int opcode,boolean aa, boolean tc, boolean rd, boolean ra, int z, int rcode){
         int flag = 0;
@@ -132,11 +134,36 @@ record DNSQuestion(short type, short qClass, String name){
         short qClass = (short) ((bytes[i+3] << 8) | (bytes[i+4] & 0xFF));
         return new DNSQuestion(type,qClass,builder.toString());
     }
-    public static short setBit(short flag, int position, boolean value){
-        if(value){
-            return (short)(flag | (1 << position));
-        } else {
-            return (short)(flag & ~(1 << position));
+}
+record DNSAnswer(String label, short type, short qClass, int ttl, short rdLength, byte[] rData){
+    public DNSAnswer{
+        if(label.length() > 63){
+            throw new IllegalArgumentException("Label max size is 63 bytes");
         }
+        if(rdLength < 0 || rdLength > 0xFFFF){
+            throw new IllegalArgumentException("rdLength capped at 2 bytes");
+        }
+        if(rData.length != rdLength){
+            throw new IllegalArgumentException("RDLENGTH must match RDATA");
+        }
+    }
+    public static DNSAnswer answer(DNSQuestion question){
+        return new DNSAnswer(question.name(), (short)1,(short)1,30,(short)4, new byte[]{8,8,8,8});
+    }
+    public byte[] serializeToByteArray(){
+        ByteBuffer buffer = ByteBuffer.allocate(10 + label.length() + rData().length); //2+2+4+2
+        for (String part : label.split("\\.")){
+            buffer.put((byte)part.length());
+            for(char c : part.toCharArray()){
+                buffer.put((byte) c);
+            }
+        }
+        buffer.put((byte)0);
+        buffer.putShort(type);
+        buffer.putShort(qClass);
+        buffer.putInt(ttl);
+        buffer.putShort(rdLength);
+        buffer.put(rData);
+        return buffer.array();
     }
 }
